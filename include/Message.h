@@ -1,5 +1,5 @@
 //
-//  MailMessage.h
+//  MailParts.h
 //  MailBlock
 //
 //  Created by Sylvain Vriens on 18/03/2013.
@@ -8,483 +8,564 @@
 
 #pragma once
 
-#include "Mail.h"
 #include "cinder/Cinder.h"
 #include "cinder/Utilities.h"
-#include "cinder/app/AppBasic.h"
+#include "cinder/Text.h"
 #include "cinder/Base64.h"
 
-#include <boost/asio.hpp>
-
+#include <boost/algorithm/string/case_conv.hpp>
 
 namespace cinder {
     namespace mail {
         
-        using namespace boost::asio::ip;
+        //these two are public for reference
+        class Message;
+        typedef std::shared_ptr<Message> MessagePtr;
         
-        enum AuthType {
-            LOGIN = 1, PLAIN
-        };
         
         class Message {
         public:
+            enum recipient_type {
+                TO,CC
+            };
             
-            // Con/de-structor
-            Message(
-                    const std::string & to = "",
-                    const std::string & from = "",
-                    const std::string & subject = "",
-                    const std::string & message = "",
-                    const std::string & server = "127.0.0.1",
-                    int32_t port = MAIL_SMTP_PORT,
-                    bool mxLookUp = true);
-            ~Message();
-            
-            // Send the message
-			bool send(){
-                return mObj->send();
-            }
-            
-			// Reset
-			void reset(){
-                mObj = std::shared_ptr<Obj>(new Obj());
-            }
-            
-			// Get server response
-			const std::string getResponse(){
-                return mObj->mServerResponse;
-            }
-            
-			// Recipient
-			bool addTo(const std::string & to){
-                if(to.size()==0) return false;
-                mObj->mTo.push_back(to);
-                return true;
-            }
-			bool addTo(const std::vector<std::string> & to){
-                for(auto& t : to){
-                    if(!addTo(t)) return false;
-                }
-                return true;
-            }
-			void clearTo(){
-                mObj->mTo.clear();
-            }
-			bool removeTo(const std::string & to){
-                std::vector<std::string>::const_iterator itr = std::find(mObj->mTo.begin(), mObj->mTo.end(), to);
-                //not found
-                if(itr==mObj->mTo.end()){
-                    return false;
-                }
-                
-                mObj->mTo.erase(itr);
-                
-                return true;
-            }
-			bool removeTo(const std::vector<std::string> & to){
-                for(auto& t : to){
-                    if(!removeTo(t)) return false;
-                }
-                return true;
-            }
-            
-			// Attachments
-			bool addAttachment(const std::string & path){ return addAttachment(ci::fs::path(path));}
-			bool addAttachments(const std::vector<std::string> & paths){
-                for(auto& path: paths){
-                    if(!addAttachment(path)){
-                        return false;
-                    }
-                }
-                
-                return true;
-            }
-			bool addAttachment(const ci::fs::path & path){
-                if(path.empty()) return false;
-                if(!exists(path)) return false;
-                if(!is_regular_file(path)) return false;
-                mObj->mAttachments.push_back(path);
-                return true;
-            }
-			bool addAttachments(const std::vector<ci::fs::path> & paths){
-                for(auto& path: paths){
-                    if(!addAttachment(path)){
-                        return false;
-                    }
-                }
-                
-                return true;
-            }
-			void clearAttachments(){
-                mObj->mAttachments.clear();
-            }
-			bool removeAttachment(const std::string & path){return removeAttachment(ci::fs::path(path));}
-			bool removeAttachments(const std::vector<std::string> & paths){
-                for(auto& path: paths){
-                    if(!removeAttachment(path)){
-                        return false;
-                    }
-                }
-                
-                return true;
-            }
-			bool removeAttachment(const ci::fs::path & path){
-                std::vector<ci::fs::path>::const_iterator itr = std::find(mObj->mAttachments.begin(), mObj->mAttachments.end(), path);
-                //not found
-                if(itr==mObj->mAttachments.end()){
-                    return false;
-                }
-                
-                mObj->mAttachments.erase(itr);
-                
-                return true;
-            }
-			bool removeAttachments(const std::vector<ci::fs::path> & paths){
-                for(auto& path: paths){
-                    if(!removeAttachment(path)){
-                        return false;
-                    }
-                }
-                
-                return true;
-            }
-            
-			// Setters
-			void setAuthentication(const AuthType & authType = AuthType::PLAIN, const std::string & username = "", const std::string & password = ""){
-                mObj->mAuthType = authType;
-                mObj->mUsername = username;
-                mObj->mPassword = password;
-            }
-			bool setFrom(const std::string & from){
-                if(from.size()==0) return false;
-                mObj->mFrom = from;
-                return true;
-            }
-			bool setMessage(const std::string & message, bool html = false){
-                if(message.size()==0) return false;
-                
-                if(html){
-                    mObj->mMessageHTML = message;
-                }else{
-                    mObj->mMessage = message;
-                }
-                
-                return true;
-            }
-			bool setServer(const std::string & server, unsigned short port = MAIL_SMTP_PORT){
-                if(server.size()==0) return false;
-                mObj->mServer = server;
-                mObj->mPort = port;
-                return true;
-            }
-			bool setSubject(const std::string & subject){
-                if(subject.size()==0) return false;
-                mObj->mSubject = subject;
-                return true;
-            }
-			bool setTo(const std::string & to){
-                mObj->mTo.clear();
-                return addTo(to);
-            }
+            typedef std::vector<std::string> Headers;
             
         protected:
             
-            //we only use the OBJ because of better copying
-            struct Obj{
-                
-                Obj() : mSocket(mIOService){
-                    
+            class Address {
+            public:
+                Address(){}
+                Address(const std::string &address, const std::string &name=""){
+                    mName = name;
+                    mAddress = address;
                 }
-                
-                //basic stuff
-                std::vector<std::string>    mTo;
-                std::string                 mFrom;
-                std::string                 mSubject;
-                
-                //message stuff
-                std::string                 mMessage;
-                std::string                 mMessageHTML;
-                
-                //attachement stuff
-                std::vector<ci::fs::path>   mAttachments;
-                
-                //auth stuff
-                AuthType                    mAuthType;
-                std::string                 mUsername;
-                std::string                 mPassword;
-                
-                //response
-                std::string                 mServerResponse;
-                
-                //server stuff
-                std::string                 mServer;
-                unsigned short              mPort;
-                boost::asio::io_service     mIOService;
-                tcp::socket                 mSocket;
-                
-                
-                bool send(){
-                    ci::app::console() << buildMessage();
-//                    return false;
-                    return operator()();
-                }
-                
-                //worker function
-                bool operator()(){
-                    if(mTo.empty()){
-                        mServerResponse = "451 Requested action aborted: local error who am I mailing";
-                        return false;
-                    }
-                    
-                    if(mFrom.size()==0){
-                        mServerResponse = "451 Requested action aborted: local error who am I";
-                        return false;
-                    }
-                    
-                    if(connect()!=220){
-                        mServerResponse = "554 Transaction failed: server connect response error.";
-                        return false;
-                    }
-                    
-                    
-                    /** TODO: check nameserver **/
-                    
-                    
-                    /** lot more checks here before we actualle begin **/
-                    
-                    
-                    //Say hello
-                    if(send("HELO cinder.local\r\n")!=250){
-                        mServerResponse = "554 Transaction failed: EHLO send/receive";
-                        return false;
-                    }
-                    
-                    //we have a user name and password, so autjenticate!
-                    //TBI
-                    if(mUsername.length() && mPassword.length()){
-                        
-                    }
-                    
-                    //set the sender
-                    if(send("MAIL FROM:<"+mFrom+">\r\n")!=250){
-                        mServerResponse = "554 MAIL FROM sending error";
-                        return false;
-                    }
-                    
-                    //set the tos
-                    if(send("RCPT TO: <" + mTo.front() + ">\r\n")!=250){
-                        mServerResponse = "554 Transaction failed";
-                        return false;
-                    }
-                    
-                    //prepare sending data
-                    if(send("DATA\r\n")!=354){
-                        mServerResponse = "554 DATA error";
-                        return false;
-                    }
-                    
-                    
-                    if(send(buildMessage())!=250){
-                        mServerResponse = "554 DATA, server response error (actual send)";
-                        return false;
-                    }
-                    
-                    
-                    if(send("QUIT\r\n")!=221){
-                        //ignore
-                    };
-                    mSocket.close();
-                    
+                bool isValid() const{
+                    if(mAddress.size()==0) return false;
                     return true;
                 }
-                
-                int connect(){
-                    try {
-                        //set up the address resolving
-                        tcp::resolver resolver(mIOService);
-                        tcp::resolver::query query(mServer, ci::toString(mPort));
-                        tcp::resolver::iterator endpoint_iterator = resolver.resolve(query), end;
-                        
-                        //try to connect
-                        boost::system::error_code error_code_connect;
-                        boost::asio::connect(mSocket, endpoint_iterator, end, error_code_connect);
-                        if(error_code_connect){
-                            return 0;
-                        }
-                        
-                        
-                        return getResponse();
-                    }catch(boost::system::system_error){
-                        
+                std::string getAddress() const{
+                    return mAddress;
+                }
+                std::string getName() const{
+                    return mName;
+                }
+                std::string getFullAddress(bool includeName=true) const{
+                    std::stringstream ret;
+                    if(includeName && mName.size()){
+                        ret << "mNAme" << " ";
                     }
-                    
-                    return 0;
+                    ret << "<" << mAddress << ">";
+                    return ret.str();
                 }
-                
-                int send(const std::string & data){
-                    try {
-                        int bytesWritten = mSocket.write_some(boost::asio::buffer(data));
-
-                        if(bytesWritten==0){
-                            return 0;
-                        }
-                        
-                        return getResponse();
-                    }catch(boost::system::system_error){
-                        
-                    }
-                    return 0;
-                }
-                
-                int getResponse(){
-                    try{
-                        boost::array<char, 128> buf;
-                        int bytesRead = mSocket.read_some(boost::asio::buffer(buf));
-                        if(bytesRead==0){
-                            return 0;
-                        }
-                        
-                        std::string response(buf.data(),bytesRead);
-                        
-                        ci::app::console() << "response: " << response << std::endl;
-                        
-                        return fromString<int>(response.substr(0,3));
-                    }catch(...){
-                    }
-                    
-                    return 0;
-                }
-                
-            std::string buildMessage(){
-                std::stringstream message;
-                
-                //From
-                message << "From: " << mFrom << "\r\n";
-                message << "Reply-To: " << mFrom << "\r\n";
-                
-                //To
-                message << "To: ";
-                for(auto& to : mTo){
-                    if(&to!=&mTo.front()){
-                        message << ",\r\n ";// must add space after comma
-                    }
-                    message << to;
-                }
-                message << "\r\n"; //here we remove the extra added ,\r\n , kind of sloppy for now
-                //TBI cc && bcc
-                
-                const std::string boundary("b52e926e95ee553820da4dca6d2304dc");
-                bool MIME = (mAttachments.size() || mMessageHTML.size());
-                
-                if(MIME){
-                    message << "MIME-Version: 1.0\r\n";
-                    message << "Content-Type: multipart/mixed;\r\n";
-                    message << "\tboundary=\"";
-                    message << boundary << "\"\r\n";
-                }
-                
-                //add the date
-                time_t t;
-                time(&t);
-                char timestring[128] = "";
-                std::string timeformat = "Date: %d %b %y %H:%M:%S %Z\r\n";
-                if(strftime(timestring, 127, timeformat.c_str(), localtime(&t))) { // got the date
-                    message << timestring;
-                }
-                
-                //add the subject
-                message << "Subject: " << mSubject << "\r\n\r\n";//extra empty line marks start of body
-                
-                
-                //we start the body here
-                if(MIME){
-                    message << "This is a MIME encapsulated message\r\n";
-                    message << "--" << boundary << "\r\n";
-                    
-                    if(!mMessageHTML.size()){ //only plain message
-                        
-                        message << "Content-type: text/plain; charset=ISO-8859-1\r\n";
-                        message << "Content-transfer-encoding: 7BIT\r\n\r\n";
-                        
-                        message << mMessage;    //TBI : RFC compliance
-                        message << "\r\n\r\n--" << boundary << "\r\n";
-                    }else{
-                        const std::string innerboundary("a0665c5b2505ed854f869a6cde447781");
-                        
-                        //a multipart massage
-                        message << "Content-Type: multipart/alternative;\r\n";
-                        message << "\tboundary=\"" << innerboundary << "\"\r\n";
-                        
-                        //add the inner boundary
-                        message << "\r\n\r\n--" << innerboundary << "\r\n";
-                        
-                        //add the plain message
-                        message << "Content-type: text/plain; charset=iso-8859-1\r\n";
-                        message << "Content-transfer-encoding: 7BIT\r\n\r\n";
-                        message << mMessage;    //TBI : RFC compliance
-                        message << "\r\n\r\n--" << innerboundary << "\r\n";
-                        
-                        //add the html message
-                        message << "Content-type: text/html; charset=iso-8859-1\r\n";
-                        message << "Content-Transfer-Encoding: BASE64\r\n\r\n";
-                        message << ci::toBase64(mMessageHTML);
-                        message << "\r\n\r\n--" << innerboundary << "--\r\n";
-                        
-                    }
-                    
-                    message << "\r\n--" << boundary;
-                    if(!mAttachments.size()){
-                        message << "--";
-                    }else{//we should add attachments TBI
-                        for(auto & path: mAttachments){
-                            message << "\r\n";
-                        
-                            //the default
-                            message << "Content-Type: application/X-other-1;\r\n";
-                            message << "\tname=" << path.filename() << "\r\n";
-                            message << "Content-Transfer-Encoding: base64\r\n";
-                            message << "Content-Disposition: attachment; filename=" << path.filename() << "\r\n\r\n";
-                            
-                            message << ci::toBase64(ci::DataSourcePath::create(path)->getBuffer(), 76);
-                            
-                            message << "\r\n\r\n--" << boundary;
-                        }
-                        message << "--";
-                    }
-                    
-                }else{
-                    //no mime attachemnets, so just paste the message
-                    message << mMessage; //TBI : RFC compliance
-                }
-                
-                //finalize the message
-                message << "\r\n.\r\n";
-                
-                return message.str();
+            protected:
+                std::string mAddress;
+                std::string mName;
+            };
+            
+        public:
+            
+            class Attachment;
+            typedef std::shared_ptr<Attachment> AttachmentPtr;
+            
+            //creator function
+            static MessagePtr create(){
+                return MessagePtr(new Message());
             }
             
+            void addAttachment(const ci::DataSourceRef& dataSource, bool embed=false){
+                addAttachment(Attachment::create(dataSource, embed));
+            }
+            
+            void addAttachment(const ci::fs::path &path, bool embed=false){
+                addAttachment(Attachment::create(path, embed));
+            }
+            
+            void addAttachment(const std::string& path, bool embed=false){
+                addAttachment(Attachment::create(path, embed));
+            }
+            
+            void addInlineAttachment(const ci::DataSourceRef& dataSource){
+                addAttachment(Attachment::create(dataSource, true));
+            }
+            
+            void addInlineAttachment(const ci::fs::path &path){
+                addAttachment(Attachment::create(path, true));
+            }
+            
+            void addInlineAttachment(const std::string& path){
+                addAttachment(Attachment::create(path, true));
+            }
+            
+            void addAttachment(const AttachmentPtr& attachment){
+                if(attachment->isEmbedded()){
+                    mContent->addAttachment(attachment);
+                }else{
+                    mAttachments.push_back(attachment);
+                }
+            }
+            
+            void setSender(const std::string& address, const std::string& name=""){
+                mFrom = Address(address, name);
+            }
+            
+            void addRecipient(const std::string& address, const std::string& name="", recipient_type type=TO){
+                Address a(address, name);
+                if(!a.isValid()) return;
                 
-        
+                if(type==TO){
+                    mTo.push_back(a);
+                }else if(type==CC){
+                    mCC.push_back(a);
+                }
+            }
+            
+            void addRecipient(const std::string& address, recipient_type type){
+                addRecipient(address, "", type);
+            }
+            
+            void setSubject(const std::string& subject){
+                mSubject = subject;
+            }
+            
+            void setMessage(const std::string& msg){
+                mContent->setMessage(msg);
+            }
+            
+            void setHTML(const std::string& html){
+                mContent->setHTML(html);
+            }
+            
+            Headers getHeaders();
+            std::string getData() const;
+            
+            
+        protected:
+            Message(){
+                mContent = Content::create();
+            }
+            
+            bool isMultiPart() const{
+                return !mAttachments.empty() || mContent->isMultiPart();
+            }
+            
+            //some define from helpe classes later on
+            class Content;
+            typedef std::shared_ptr<Content> ContentPtr;
+            
+            
+            ContentPtr                  mContent;
+            std::vector<AttachmentPtr>  mAttachments;
+            
+            Address                     mFrom;
+            Address                     mReplyTo;
+            std::vector<Address>        mTo;
+            std::vector<Address>        mCC;
+            std::string                 mSubject;
+            
+            const std::string mBoundary = "=585ac769fba6306f9982300a8af93da7=";
+            
+            //****************//
+            // HELPER CLASSES //
+            //****************//
+        protected:
+            class Text;
+            class HTML;
+            typedef std::shared_ptr<Text> TextPtr;
+            typedef std::shared_ptr<HTML> HTMLPtr;
+            
+            class MailPart {
+                virtual std::string getData() const{return "";}
             };
-            std::shared_ptr<Obj>            mObj;
-        
+            
+            class Text : public MailPart {
+            public:
+                
+                static TextPtr create(const std::string& content=""){
+                    return TextPtr(new Text(content));
+                }
+                
+                virtual Headers getHeaders() const;
+                virtual std::string getData() const;
+                
+                void setContent(const std::string& content){
+                    mContent = content;
+                }
+            protected:
+                Text(const std::string& content=""){
+                    mContent = content;
+                }
+                
+                std::string mContent;
+            };
+            
+            class HTML : public Text {
+            public:
+                
+                static HTMLPtr create(const std::string& content=""){
+                    return HTMLPtr(new HTML(content));
+                }
+                
+                void addAttachment(const AttachmentPtr& attachment){
+                    mAttachments.push_back(attachment);
+                }
+                
+                bool isMultiPart() const{
+                    return !mAttachments.empty();
+                }
+                
+                virtual Headers getHeaders() const;
+                std::string getData() const;
+                
+            protected:
+                HTML(const std::string& content=""){
+                    mContent = content;
+                }
+                
+                std::vector<AttachmentPtr> mAttachments;
+                
+                const std::string mBoundary = "=bd91c9aaf15895bc2251fedfa9d433b6=";
+            };
+            
+            class Content : public MailPart {
+            public:
+                static ContentPtr create(){
+                    return ContentPtr(new Content());
+                }
+                
+                bool isMultiPart() const{
+                    if(mHTML){
+                        return true;
+                    }
+                    return false;
+                }
+                
+                Headers getHeaders() const;
+                std::string getData() const;
+                
+                void addAttachment(const AttachmentPtr& attachment){
+                    if(!mHTML){
+                        mHTML = HTML::create();
+                    }
+                    mHTML->addAttachment(attachment);
+                }
+                
+                void setMessage(const std::string& msg){
+                    mText->setContent(msg);
+                }
+                
+                void setHTML(const std::string& html){
+                    if(!mHTML){
+                        mHTML = HTML::create();
+                    }
+                    mHTML->setContent(html);
+                }
+            protected:
+                Content(){
+                    mText = Text::create("");
+                }
+                
+                TextPtr mText;
+                HTMLPtr mHTML;
+                
+                const std::string mBoundary = "=3ebb25d3e279a83ea483bb8daa1f5588=";
+            };
+        public:
+            class Attachment : public MailPart {
+            public:
+                
+                static AttachmentPtr create(const ci::DataSourceRef& datasource, bool embed=false){
+                    return AttachmentPtr(new Attachment(datasource, embed));
+                }
+                static AttachmentPtr create(const ci::fs::path &path, bool embed=false){
+                    return AttachmentPtr(new Attachment(ci::DataSourcePath::create(path), embed));
+                }
+                static AttachmentPtr create(const std::string &path, bool embed=false){
+                    return create(ci::fs::path(path), embed);
+                }
+                
+                bool isEmbedded(){
+                    return mEmbedded;
+                }
+                
+                std::string getCID() const{
+                    return mDataSource->getFilePath().filename().string();
+                }
+                
+                Headers getHeaders() const;
+                std::string getData() const;
+                
+            protected:
+                Attachment(const ci::DataSourceRef& datasource, bool embed=false){
+                    mDataSource = datasource;
+                    mEmbedded = embed;
+                }
+                
+                ci::DataSourceRef mDataSource;
+                bool mEmbedded;
+            };
+            
+        protected:
+            
+            
         };
         
         
-        /** IMPLEMENTATION **/
-        Message::Message(const std::string & to, const std::string & from, const std::string & subject, const std::string & message, const std::string & server, int32_t port,bool mxLookUp){
-            reset();
-            setTo(to);
-            setFrom(from);
-            setSubject(subject);
-            setMessage(message);
-            setServer(server, port);
-            //loopup
+        typedef Message::AttachmentPtr AttachmentPtr;
+        
+        
+        
+        //****************************//
+        // getData implementations //
+        //****************************//
+        Message::Headers Message::getHeaders(){
+            Message::Headers headers;
+            
+            //check complete here first
+            
+            headers.push_back("MAIL FROM:" + mFrom.getFullAddress(false));
+            if(mTo.size()){//to prevent an error here, if it is empty the server will most likely reject it
+                headers.push_back("RCPT TO:" + mTo.front().getFullAddress(false));
+            }
+            
+            return headers;
         }
         
-        Message::~Message(){
+        std::string Message::getData() const {
+            std::stringstream data;
+            
+            
+            //check complete here first
+            
+            //sender
+            data << "From: " << mFrom.getFullAddress() << MAIL_SMTP_NEWLINE;
+            data << "Reply-to: ";
+            if(mReplyTo.isValid()){
+                data << mReplyTo.getAddress() << MAIL_SMTP_NEWLINE;
+            }else{
+                data << mFrom.getAddress() << MAIL_SMTP_NEWLINE;
+            }
+            
+            //the TO
+            std::vector<Address>::const_iterator itr;
+            for(itr = mTo.begin(); itr<mTo.end(); ++itr){
+                if(itr==mTo.begin()){
+                    data << "To: ";
+                }
+                data << (*itr).getFullAddress();
+                
+                if((itr+1)<mTo.end()){
+                    data << "," << MAIL_SMTP_NEWLINE << " "; //we add a space because we need to (duh!)
+                }else{
+                    data << MAIL_SMTP_NEWLINE;
+                }
+            }
+            
+            //the CC
+            for(itr = mCC.begin(); itr<mCC.end(); ++itr){//reusing the itr form the to
+                if(itr==mCC.begin()){
+                    data << "Cc: ";
+                }
+                data << (*itr).getFullAddress();
+                
+                if((itr+1)<mCC.end()){
+                    data << "," << MAIL_SMTP_NEWLINE << " "; //we add a space because we need to (duh!)
+                }else{
+                    data << MAIL_SMTP_NEWLINE;
+                }
+            }
+            
+            //add a multipart header in case we have a multipart message
+            if(isMultiPart()){
+                data << "MIME-Version: 1.0" << MAIL_SMTP_NEWLINE << "Content-Type: multipart/mixed;" << MAIL_SMTP_NEWLINE << "\tboundary=\"" << mBoundary << "\"" << MAIL_SMTP_NEWLINE;
+            }
+            
+            //add the current local data
+            time_t t;
+            time(&t);
+            char timestring[128] = "";
+            std::string timeformat = "Date: %d %b %y %H:%M:%S %Z";
+            if(strftime(timestring, 127, timeformat.c_str(), localtime(&t))) { // got the date
+                data << timestring << MAIL_SMTP_NEWLINE;
+            }
+            
+            //add the subject line
+            data << "Subject: " << mSubject << MAIL_SMTP_NEWLINE << MAIL_SMTP_NEWLINE;
+            
+            if(isMultiPart()){
+                data << "This is a MIME encapsulated message" << MAIL_SMTP_NEWLINE;
+                data << "--" << mBoundary << MAIL_SMTP_NEWLINE;
+                
+                
+                //the content part
+                Headers headers = mContent->getHeaders();
+                for(auto& header: headers){
+                    data << header << MAIL_SMTP_NEWLINE;
+                }
+                data << mContent->getData() << MAIL_SMTP_NEWLINE;
+                
+                //the attachemnets
+                for(auto& attachment: mAttachments){
+                    data << MAIL_SMTP_NEWLINE << "--" << mBoundary << MAIL_SMTP_NEWLINE;
+                    
+                    Headers headers = attachment->getHeaders();
+                    for(auto& header: headers){
+                        data << header << MAIL_SMTP_NEWLINE;
+                    }
+                    
+                    data << MAIL_SMTP_NEWLINE << attachment->getData() << MAIL_SMTP_NEWLINE;
+                }
+
+                data << MAIL_SMTP_NEWLINE << "--" << mBoundary << "--" << MAIL_SMTP_NEWLINE;
+                
+            }else{
+                //it has not alternative parts or attachents, so just the data
+                data << mContent->getData();
+            }
+            
+            //terminate the message
+            data << MAIL_SMTP_NEWLINE << "." << MAIL_SMTP_NEWLINE;
+            
+            return data.str();
         }
         
+        Message::Headers Message::Content::getHeaders() const {
+            Message::Headers headers;
+            if(!isMultiPart()){ //no parts so anempty header
+                return headers;
+            }
+            headers.push_back("Content-Type: multipart/alternative;");
+            headers.push_back("\tboundary=\"" + mBoundary + "\"");
+            
+            return headers;
+        }
+        
+        std::string Message::Content::getData() const{
+            if(!isMultiPart()){
+                return mText->getData();
+            }
+            
+            std::stringstream data;
+            
+            data << MAIL_SMTP_NEWLINE << "--" << mBoundary << MAIL_SMTP_NEWLINE;
+            
+            Headers headers = mText->getHeaders();
+            for(auto& header: headers){
+                data << header << MAIL_SMTP_NEWLINE;
+            }
+            data << MAIL_SMTP_NEWLINE <<mText->getData() << MAIL_SMTP_NEWLINE;
+            
+            data << MAIL_SMTP_NEWLINE<< "--" << mBoundary << MAIL_SMTP_NEWLINE;
+            
+            headers = mHTML->getHeaders();
+            for(auto& header: headers){
+                data << header << MAIL_SMTP_NEWLINE;
+            }
+            data << MAIL_SMTP_NEWLINE <<mHTML->getData() << MAIL_SMTP_NEWLINE;
+            
+            data << MAIL_SMTP_NEWLINE << "--" << mBoundary << "--" << MAIL_SMTP_NEWLINE;
+            
+            return data.str();
+        }
+        
+        
+        Message::Headers Message::Text::getHeaders() const {
+            Message::Headers headers;
+            
+            headers.push_back("Content-type: text/plain; charset=ISO-8859-1");
+            headers.push_back("Content-transfer-encoding: 7BIT");
+            
+            return headers;
+        }
+        
+        std::string Message::Text::getData() const{
+            return mContent;
+        }
+        
+        Message::Headers Message::HTML::getHeaders() const {
+            Message::Headers headers;
+            
+            if(isMultiPart()){
+                headers.push_back("Content-type: multipart/related;");
+                headers.push_back("\tboundary=\"" + mBoundary + "\"");
+                headers.push_back("");
+                headers.push_back("--" + mBoundary);
+            }
+            
+            headers.push_back("Content-type: text/html; charset=ISO-8859-1");
+            headers.push_back("Content-transfer-encoding: 7BIT");
+            
+            return headers;
+        }
+        
+        std::string Message::HTML::getData() const {
+            std::stringstream data;
+            
+            data << mContent;
+            
+            if(isMultiPart()){
+                data << MAIL_SMTP_NEWLINE;
+                //the attachemnets
+                for(auto& attachment: mAttachments){
+                    data << MAIL_SMTP_NEWLINE << "--" << mBoundary << MAIL_SMTP_NEWLINE;
+                    
+                    Headers headers = attachment->getHeaders();
+                    for(auto& header: headers){
+                        data << header << MAIL_SMTP_NEWLINE;
+                    }
+                    
+                    data << MAIL_SMTP_NEWLINE << attachment->getData() << MAIL_SMTP_NEWLINE;
+                }
+                
+                data << MAIL_SMTP_NEWLINE << "--" << mBoundary << "--" << MAIL_SMTP_NEWLINE;
+            }
+            
+            return data.str();
+        }
+        
+        
+        Message::Headers Message::Attachment::getHeaders() const {
+            Message::Headers headers;
+            
+            ci::fs::path path = mDataSource->getFilePath();
+            std::string filename = path.filename().string();
+            std::string extension = path.extension().string();
+            boost::algorithm::to_lower(extension);
+            
+            
+            if(extension==".gif"){
+                headers.push_back("Content-Type: image/gif;");
+            }else if(extension==".jpg" || extension==".jpeg"){
+                headers.push_back("Content-Type: image/jpg;");
+            }else if(extension==".txt"){
+                headers.push_back("Content-Type: plain/txt;");
+            }else if(extension==".bmp"){
+                headers.push_back("Content-Type: image/bmp;");
+            }else if(extension==".html" || extension==".htm"){
+                headers.push_back("Content-Type: plain/htm;");
+            }else if(extension==".png"){
+                headers.push_back("Content-Type: image/png;");
+            }else if(extension==".exe"){
+                headers.push_back("Content-Type: application/X-exectype-1;");
+            }else{
+                headers.push_back("Content-Type: application/X-other-1;");
+            }
+            
+            headers.push_back("\tname=\"" + filename + "\"");
+            headers.push_back("Content-Transfer-Encoding: base64");
+            
+            if(mEmbedded){
+                headers.push_back("Content-Id: <" + getCID() + ">"); //cid is currently the filename, this is forward thinking!
+            }else{
+                headers.push_back("Content-Disposition: attachment; filename=\"" + filename + "\"");
+            }
+            
+            return headers;
+        }
+        
+        std::string Message::Attachment::getData() const{
+            return ci::toBase64(mDataSource->getBuffer(), MAIL_SMTP_BASE64_LINE_WIDTH);
+        }
         
         
     }

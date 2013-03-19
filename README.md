@@ -21,10 +21,7 @@ SMTP from Cinder. This version is very sloppy and needs a lot of clean-up checks
     mailer->sendMessage(message);
 
 This will result in something like this:
-<<<<<<< HEAD
 
-=======
->>>>>>> 6da7f38c8ba443994b72e558ccc54ff3e054bbe0
 ![ScreenShot](https://raw.github.com/sy1vain/Cinder-Mail/master/screenshots/email.png)
 
 **TODO (at the very least):**

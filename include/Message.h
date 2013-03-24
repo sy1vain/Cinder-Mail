@@ -73,36 +73,37 @@ namespace cinder {
                 return MessagePtr(new Message());
             }
             
-            void addAttachment(const ci::DataSourceRef& dataSource, bool embed=false){
-                addAttachment(Attachment::create(dataSource, embed));
+            AttachmentPtr addAttachment(const ci::DataSourceRef& dataSource, bool embed=false){
+                return addAttachment(Attachment::create(dataSource, embed));
             }
             
-            void addAttachment(const ci::fs::path &path, bool embed=false){
-                addAttachment(Attachment::create(path, embed));
+            AttachmentPtr addAttachment(const ci::fs::path &path, bool embed=false){
+                return addAttachment(Attachment::create(path, embed));
             }
             
-            void addAttachment(const std::string& path, bool embed=false){
-                addAttachment(Attachment::create(path, embed));
+            AttachmentPtr addAttachment(const std::string& path, bool embed=false){
+                return addAttachment(Attachment::create(path, embed));
             }
             
-            void addInlineAttachment(const ci::DataSourceRef& dataSource){
-                addAttachment(Attachment::create(dataSource, true));
+            AttachmentPtr addInlineAttachment(const ci::DataSourceRef& dataSource){
+                return addAttachment(Attachment::create(dataSource, true));
             }
             
-            void addInlineAttachment(const ci::fs::path &path){
-                addAttachment(Attachment::create(path, true));
+            AttachmentPtr addInlineAttachment(const ci::fs::path &path){
+                return addAttachment(Attachment::create(path, true));
             }
             
-            void addInlineAttachment(const std::string& path){
-                addAttachment(Attachment::create(path, true));
+            AttachmentPtr addInlineAttachment(const std::string& path){
+                return addAttachment(Attachment::create(path, true));
             }
             
-            void addAttachment(const AttachmentPtr& attachment){
-                if(attachment->isEmbedded()){
+            AttachmentPtr addAttachment(const AttachmentPtr& attachment, bool embed=false){
+                if(embed){
                     mContent->addAttachment(attachment);
                 }else{
                     mAttachments.push_back(attachment);
                 }
+                return attachment;
             }
             
             void setSender(const std::string& address, const std::string& name=""){
@@ -275,20 +276,25 @@ namespace cinder {
             public:
                 
                 static AttachmentPtr create(const ci::DataSourceRef& datasource, bool embed=false){
-                    return AttachmentPtr(new Attachment(datasource, embed));
+                    return AttachmentPtr(new Attachment(datasource));
                 }
                 static AttachmentPtr create(const ci::fs::path &path, bool embed=false){
-                    return AttachmentPtr(new Attachment(ci::DataSourcePath::create(path), embed));
+                    return create(ci::DataSourcePath::create(path), embed);
                 }
                 static AttachmentPtr create(const std::string &path, bool embed=false){
                     return create(ci::fs::path(path), embed);
                 }
                 
-                bool isEmbedded(){
-                    return mEmbedded;
+                std::string getCID() const{
+                    std::string path(mDataSource->getFilePath().string());
+
+                    size_t hash = std::hash<std::string>()(path);
+                    std::string cid = ci::toBase64(ci::toString(hash));
+                    
+                    return cid;
                 }
                 
-                std::string getCID() const{
+                std::string getFileName() const{
                     return mDataSource->getFilePath().filename().string();
                 }
                 
@@ -296,9 +302,9 @@ namespace cinder {
                 std::string getData() const;
                 
             protected:
-                Attachment(const ci::DataSourceRef& datasource, bool embed=false){
+                Attachment(const ci::DataSourceRef& datasource, bool embedded=false){
                     mDataSource = datasource;
-                    mEmbedded = embed;
+                    mEmbedded = embedded;
                 }
                 
                 ci::DataSourceRef mDataSource;

@@ -14,6 +14,7 @@
 #include "cinder/Base64.h"
 
 #include <boost/algorithm/string/case_conv.hpp>
+#include <regex>
 
 namespace cinder {
     namespace mail {
@@ -86,15 +87,15 @@ namespace cinder {
             }
             
             AttachmentPtr addInlineAttachment(const ci::DataSourceRef& dataSource){
-                return addAttachment(Attachment::create(dataSource, true));
+                return addAttachment(Attachment::create(dataSource, true), true);
             }
             
             AttachmentPtr addInlineAttachment(const ci::fs::path &path){
-                return addAttachment(Attachment::create(path, true));
+                return addAttachment(Attachment::create(path, true), true);
             }
             
             AttachmentPtr addInlineAttachment(const std::string& path){
-                return addAttachment(Attachment::create(path, true));
+                return addAttachment(Attachment::create(path, true), true);
             }
             
             AttachmentPtr addAttachment(const AttachmentPtr& attachment, bool embed=false){
@@ -223,6 +224,8 @@ namespace cinder {
                     mContent = content;
                 }
                 
+                std::string findReplaceCID(const std::string& data) const;
+                
                 std::vector<AttachmentPtr> mAttachments;
                 
                 const std::string mBoundary = "=bd91c9aaf15895bc2251fedfa9d433b6=";
@@ -276,7 +279,7 @@ namespace cinder {
             public:
                 
                 static AttachmentPtr create(const ci::DataSourceRef& datasource, bool embed=false){
-                    return AttachmentPtr(new Attachment(datasource));
+                    return AttachmentPtr(new Attachment(datasource, embed));
                 }
                 static AttachmentPtr create(const ci::fs::path &path, bool embed=false){
                     return create(ci::DataSourcePath::create(path), embed);
@@ -507,7 +510,8 @@ namespace cinder {
         std::string Message::HTML::getData() const {
             std::stringstream data;
             
-            data << mContent;
+            data << findReplaceCID(mContent);
+            
             
             if(isMultiPart()){
                 data << MAIL_SMTP_NEWLINE;
@@ -527,6 +531,22 @@ namespace cinder {
             }
             
             return data.str();
+        }
+        
+        std::string Message::HTML::findReplaceCID(const std::string& data) const{
+            
+            if(mAttachments.empty()) return data;
+            
+            std::string ret = data;
+            
+            for(auto& attachment: mAttachments){
+                std::regex regex("cid:" + attachment->getFileName());
+                std::string replace("cid:" + attachment->getCID());
+                ret = std::regex_replace(data, regex, replace);
+            }
+            
+            
+            return ret;
         }
         
         

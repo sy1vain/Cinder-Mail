@@ -299,12 +299,8 @@ namespace cinder {
                 return;
             }
             
-            
-            ci::app::console() << "succes! disconnecting" << std::endl;
-    
             disconnect(socket);
             
-            ci::app::console() << "done" << std::endl;
     
         }
         
@@ -436,8 +432,6 @@ namespace cinder {
                 }
 
                 std::string response(buf.data(),bytesRead);
-                
-                ci::app::console() << response << std::endl;
                 
                 return Responses(ci::split(response, MAIL_SMTP_NEWLINE));
             }catch(...){

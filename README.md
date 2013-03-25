@@ -31,7 +31,5 @@ Any `cid:filename` in the HTML will be replaced by the cid of a matching file.
 * auto create plain text alternative from HTML
 * management of recipients and attachments
 * load html from file
-* format text to conform to the 1000 characters per line and correct newlines / encoding (7bit)
-* fix bug with single . on line (see above point)
 * notifications of succes/failure
 * SSL support -> currently Cinder does not contain the right boost build for this

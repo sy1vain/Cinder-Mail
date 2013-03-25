@@ -198,6 +198,9 @@ namespace cinder {
                     mContent = content;
                 }
                 
+                //format for max 100 chars per line and not single '.' on a line
+                std::string formatRFC(const std::string& data) const;
+                
                 std::string mContent;
             };
             
@@ -488,7 +491,41 @@ namespace cinder {
         }
         
         std::string Message::Text::getData() const{
-            return mContent;
+            return formatRFC(mContent);
+        }
+        
+        std::string Message::Text::formatRFC(const std::string &data) const{
+            
+            //replace any wrong line-endings
+            std::string replace = std::regex_replace(data, std::regex("\n\r|\r[^\n]|[^\r]\n"), MAIL_SMTP_NEWLINE);
+            
+            std::vector<std::string> lines = ci::split(data, MAIL_SMTP_NEWLINE);
+            
+            std::stringstream ss;
+            for(std::vector<std::string>::iterator itr=lines.begin(); itr<lines.end(); ++itr){
+                //if not the first push the line charactre first
+                if(itr!=lines.begin()) ss << MAIL_SMTP_NEWLINE;
+                
+                std::string line = *itr;
+                
+                //if only a point, add it with a space
+                if(line=="."){
+                    ss<<".."; //will show up as a single point
+                    continue;
+                }
+            
+                size_t found;
+                while(line.size()>100 && (found=line.rfind(" ",100))!=std::string::npos){
+                    ss << line.substr(0,found) << MAIL_SMTP_NEWLINE;
+                    line = line.substr(found+1);
+                }
+                ss << line;
+            
+                
+            }
+            
+            
+            return ss.str();
         }
         
         Message::Headers Message::HTML::getHeaders() const {
@@ -510,7 +547,8 @@ namespace cinder {
         std::string Message::HTML::getData() const {
             std::stringstream data;
             
-            data << findReplaceCID(mContent);
+            //find and replace cid and make it max 100 chars per line
+            data << formatRFC(findReplaceCID(mContent));
             
             
             if(isMultiPart()){

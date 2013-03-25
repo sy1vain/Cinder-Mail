@@ -3,6 +3,8 @@ Cinder-Mail
 
 SMTP from Cinder. This version is very sloppy and needs a lot of clean-up checks, etc etc. But it works for now for my project. When I find the time or need more functionality I will update the code.
 
+SSL is not supported since the corresponding boost libraries are not built in the current (dev) distribution.
+
 **Using the code**
 
 	//create a message

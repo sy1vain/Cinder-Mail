@@ -33,5 +33,4 @@ Any `cid:filename` in the HTML will be replaced by the cid of a matching file.
 * auto create plain text alternative from HTML
 * management of recipients and attachments
 * load html from file
-* notifications of succes/failure
 * SSL support -> currently Cinder does not contain the right boost build for this

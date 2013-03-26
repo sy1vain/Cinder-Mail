@@ -165,7 +165,7 @@ namespace cinder {
             std::vector<Address>        mCC;
             std::string                 mSubject;
             
-            const std::string mBoundary = "=585ac769fba6306f9982300a8af93da7=";
+            static const std::string mBoundary;
             
             //****************//
             // HELPER CLASSES //
@@ -231,7 +231,7 @@ namespace cinder {
                 
                 std::vector<AttachmentPtr> mAttachments;
                 
-                const std::string mBoundary = "=bd91c9aaf15895bc2251fedfa9d433b6=";
+                static const std::string mBoundary;
             };
             
             class Content : public MailPart {
@@ -275,7 +275,7 @@ namespace cinder {
                 TextPtr mText;
                 HTMLPtr mHTML;
                 
-                const std::string mBoundary = "=3ebb25d3e279a83ea483bb8daa1f5588=";
+                static const std::string mBoundary;
             };
         public:
             class Attachment : public MailPart {
@@ -631,6 +631,10 @@ namespace cinder {
             return ci::toBase64(mDataSource->getBuffer(), MAIL_SMTP_BASE64_LINE_WIDTH);
         }
         
-        
+        //boundaries used in the different message parts
+		const std::string Message::mBoundary = "=585ac769fba6306f9982300a8af93da7=";
+		const std::string Message::HTML::mBoundary = "=bd91c9aaf15895bc2251fedfa9d433b6=";
+		const std::string Message::Content::mBoundary = "=3ebb25d3e279a83ea483bb8daa1f5588=";
+
     }
 }

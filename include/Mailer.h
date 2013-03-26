@@ -11,6 +11,7 @@
 #include "cinder/Cinder.h"
 #include "cinder/Thread.h"
 #include "cinder/Utilities.h"
+#include "cinder/Function.h"
 
 
 #include "Mail.h"
@@ -28,6 +29,8 @@ namespace cinder {
         class Mailer;
         typedef std::shared_ptr<Mailer> MailerPtr;
         
+        typedef signals::signal<void(MessagePtr,bool)> SentSignalType;
+        
         class Mailer {
         public:
             
@@ -43,6 +46,10 @@ namespace cinder {
                                     const std::string & password="",
                                     LoginType type=PLAIN){
                 return MailerPtr(new Mailer(server, port, username, password, type));
+            }
+            
+            SentSignalType& getSignalSent(){
+                return mObj->mSignalSent;
             }
             
             void sendMessage(const MessagePtr& msg){
@@ -206,6 +213,18 @@ namespace cinder {
                     }
                 }
                 
+                void success(MessagePtr msg){
+                    signal(msg,true);
+                }
+                
+                void fail(MessagePtr msg){
+                    signal(msg, false);
+                }
+                
+                void signal(MessagePtr msg, bool success){
+                    mSignalSent(msg, success);
+                }
+                
                 //implemented lower to save some space here
                 void sendMessage(const MessagePtr& msg);
                 SocketPtr connect();
@@ -227,6 +246,9 @@ namespace cinder {
                 std::string mPassword;
                 LoginType mLoginType;
                 bool mSSL;
+                
+                //notifications
+                SentSignalType  mSignalSent;
                 
                 io_service ios;
                 
@@ -251,7 +273,7 @@ namespace cinder {
             SocketPtr socket = connect();
             if(!socket){
                 ci::app::console() << "unable to connect" << std::endl;
-                //FAIL
+                fail(msg);
                 return;
             }
             
@@ -260,7 +282,7 @@ namespace cinder {
             reply = readReply(socket);
             if(reply!=220){//220 is OK
                 disconnect(socket);
-                //FAIL
+                fail(msg);
                 return;
             }
             
@@ -268,7 +290,7 @@ namespace cinder {
             reply = authenticate(socket);
             if(reply!=250 && reply!=235){ //response should be ok or authentication succeeded
                 disconnect(socket);
-                //FAIL
+                fail(msg);
                 return;
             }
             
@@ -279,7 +301,7 @@ namespace cinder {
                 reply = sendData(socket, header);
                 if(reply!=250){
                     disconnect(socket);
-                    //FAIL
+                    fail(msg);
                     return;
                 }
             }
@@ -288,20 +310,20 @@ namespace cinder {
             reply = sendData(socket, "DATA");
             if(reply!=354){ //data delimited with .
                 disconnect(socket);
-                //FAIL
+                fail(msg);
                 return;
             }
             
             reply = sendData(socket, msg->getData(),false);
             if(reply!=250){//OK
                 disconnect(socket);
-                //FAIL
+                fail(msg);
                 return;
             }
             
             disconnect(socket);
             
-    
+            success(msg);
         }
         
         Mailer::Obj::SocketPtr Mailer::Obj::connect(){

@@ -31,6 +31,6 @@ Any `cid:filename` in the HTML will be replaced by the cid of a matching file.
 **TODO (at the very least):**
 
 * auto create plain text alternative from HTML
+* check email address?
 * management of recipients and attachments
-* load html from file
 * SSL support -> currently Cinder does not contain the right boost build for this

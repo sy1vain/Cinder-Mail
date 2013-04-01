@@ -12,6 +12,8 @@
 #include "cinder/Utilities.h"
 #include "cinder/Text.h"
 #include "cinder/Base64.h"
+#include "cinder/app/App.h"
+#include "cinder/DataSource.h"
 
 #include <boost/algorithm/string/case_conv.hpp>
 #include <regex>
@@ -21,7 +23,7 @@ namespace cinder {
         
         //these two are public for reference
         class Message;
-        typedef std::shared_ptr<Message> MessagePtr;
+        typedef std::shared_ptr<Message> MessageRef;
         
         
         class Message {
@@ -67,38 +69,38 @@ namespace cinder {
         public:
             
             class Attachment;
-            typedef std::shared_ptr<Attachment> AttachmentPtr;
+            typedef std::shared_ptr<Attachment> AttachmentRef;
             
             //creator function
-            static MessagePtr create(){
-                return MessagePtr(new Message());
+            static MessageRef create(){
+                return MessageRef(new Message());
             }
             
-            AttachmentPtr addAttachment(const ci::DataSourceRef& dataSource, bool embed=false){
+            AttachmentRef addAttachment(const ci::DataSourceRef& dataSource, bool embed=false){
                 return addAttachment(Attachment::create(dataSource, embed));
             }
             
-            AttachmentPtr addAttachment(const ci::fs::path &path, bool embed=false){
+            AttachmentRef addAttachment(const ci::fs::path &path, bool embed=false){
                 return addAttachment(Attachment::create(path, embed));
             }
             
-            AttachmentPtr addAttachment(const std::string& path, bool embed=false){
+            AttachmentRef addAttachment(const std::string& path, bool embed=false){
                 return addAttachment(Attachment::create(path, embed));
             }
             
-            AttachmentPtr addInlineAttachment(const ci::DataSourceRef& dataSource){
+            AttachmentRef addInlineAttachment(const ci::DataSourceRef& dataSource){
                 return addAttachment(Attachment::create(dataSource, true), true);
             }
             
-            AttachmentPtr addInlineAttachment(const ci::fs::path &path){
+            AttachmentRef addInlineAttachment(const ci::fs::path &path){
                 return addAttachment(Attachment::create(path, true), true);
             }
             
-            AttachmentPtr addInlineAttachment(const std::string& path){
+            AttachmentRef addInlineAttachment(const std::string& path){
                 return addAttachment(Attachment::create(path, true), true);
             }
             
-            AttachmentPtr addAttachment(const AttachmentPtr& attachment, bool embed=false){
+            AttachmentRef addAttachment(const AttachmentRef& attachment, bool embed=false){
                 if(embed){
                     mContent->addAttachment(attachment);
                 }else{
@@ -134,8 +136,32 @@ namespace cinder {
                 mContent->setMessage(msg);
             }
             
+            void loadMessage(const ci::fs::path& path){
+                try{
+                    setMessage(
+                               ci::loadString(
+                                              ci::loadFile(path)
+                               )
+                    );
+                }catch(...){
+                    ci::app::console() << "Failed to load message content" << std::endl;
+                }
+            }
+            
             void setHTML(const std::string& html){
                 mContent->setHTML(html);
+            }
+            
+            void loadHTML(const ci::fs::path& path){
+                try {
+                    setHTML(
+                            ci::loadString(
+                                           ci::loadFile(path)
+                            )
+                            );
+                }catch(...){
+                    ci::app::console() << "Failed to load HTML message content" << std::endl;
+                }
             }
             
             Headers getHeaders();
@@ -153,11 +179,11 @@ namespace cinder {
             
             //some define from helpe classes later on
             class Content;
-            typedef std::shared_ptr<Content> ContentPtr;
+            typedef std::shared_ptr<Content> ContentRef;
             
             
-            ContentPtr                  mContent;
-            std::vector<AttachmentPtr>  mAttachments;
+            ContentRef                  mContent;
+            std::vector<AttachmentRef>  mAttachments;
             
             Address                     mFrom;
             Address                     mReplyTo;
@@ -173,8 +199,8 @@ namespace cinder {
         protected:
             class Text;
             class HTML;
-            typedef std::shared_ptr<Text> TextPtr;
-            typedef std::shared_ptr<HTML> HTMLPtr;
+            typedef std::shared_ptr<Text> TextRef;
+            typedef std::shared_ptr<HTML> HTMLRef;
             
             class MailPart {
                 virtual std::string getData() const{return "";}
@@ -183,8 +209,8 @@ namespace cinder {
             class Text : public MailPart {
             public:
                 
-                static TextPtr create(const std::string& content=""){
-                    return TextPtr(new Text(content));
+                static TextRef create(const std::string& content=""){
+                    return TextRef(new Text(content));
                 }
                 
                 virtual Headers getHeaders() const;
@@ -192,6 +218,10 @@ namespace cinder {
                 
                 void setContent(const std::string& content){
                     mContent = content;
+                }
+                
+                std::string getText(){
+                    return mContent;
                 }
             protected:
                 Text(const std::string& content=""){
@@ -207,17 +237,20 @@ namespace cinder {
             class HTML : public Text {
             public:
                 
-                static HTMLPtr create(const std::string& content=""){
-                    return HTMLPtr(new HTML(content));
+                static HTMLRef create(const std::string& content=""){
+                    return HTMLRef(new HTML(content));
                 }
                 
-                void addAttachment(const AttachmentPtr& attachment){
+                void addAttachment(const AttachmentRef& attachment){
                     mAttachments.push_back(attachment);
                 }
                 
                 bool isMultiPart() const{
                     return !mAttachments.empty();
                 }
+                
+                //will strip HTML and return text
+                std::string getText();
                 
                 virtual Headers getHeaders() const;
                 std::string getData() const;
@@ -229,15 +262,15 @@ namespace cinder {
                 
                 std::string findReplaceCID(const std::string& data) const;
                 
-                std::vector<AttachmentPtr> mAttachments;
+                std::vector<AttachmentRef> mAttachments;
                 
                 static const std::string mBoundary;
             };
             
             class Content : public MailPart {
             public:
-                static ContentPtr create(){
-                    return ContentPtr(new Content());
+                static ContentRef create(){
+                    return ContentRef(new Content());
                 }
                 
                 bool isMultiPart() const{
@@ -250,14 +283,15 @@ namespace cinder {
                 Headers getHeaders() const;
                 std::string getData() const;
                 
-                void addAttachment(const AttachmentPtr& attachment){
+                void addAttachment(const AttachmentRef& attachment){
                     if(!mHTML){
-                        mHTML = HTML::create();
+                        setHTML("");
                     }
                     mHTML->addAttachment(attachment);
                 }
                 
                 void setMessage(const std::string& msg){
+                    if(!mText) mText = Text::create("");
                     mText->setContent(msg);
                 }
                 
@@ -266,14 +300,18 @@ namespace cinder {
                         mHTML = HTML::create();
                     }
                     mHTML->setContent(html);
+                    
+                    //if no text or the content length is 0
+                    if(!mText || mText->getText().size()==0){
+                        mText = Text::create(mHTML->getText());
+                    }
                 }
             protected:
                 Content(){
-                    mText = Text::create("");
                 }
                 
-                TextPtr mText;
-                HTMLPtr mHTML;
+                TextRef mText;
+                HTMLRef mHTML;
                 
                 static const std::string mBoundary;
             };
@@ -281,13 +319,13 @@ namespace cinder {
             class Attachment : public MailPart {
             public:
                 
-                static AttachmentPtr create(const ci::DataSourceRef& datasource, bool embed=false){
-                    return AttachmentPtr(new Attachment(datasource, embed));
+                static AttachmentRef create(const ci::DataSourceRef& datasource, bool embed=false){
+                    return AttachmentRef(new Attachment(datasource, embed));
                 }
-                static AttachmentPtr create(const ci::fs::path &path, bool embed=false){
+                static AttachmentRef create(const ci::fs::path &path, bool embed=false){
                     return create(ci::DataSourcePath::create(path), embed);
                 }
-                static AttachmentPtr create(const std::string &path, bool embed=false){
+                static AttachmentRef create(const std::string &path, bool embed=false){
                     return create(ci::fs::path(path), embed);
                 }
                 
@@ -323,7 +361,7 @@ namespace cinder {
         };
         
         
-        typedef Message::AttachmentPtr AttachmentPtr;
+        typedef Message::AttachmentRef AttachmentRef;
         
         
         
@@ -453,6 +491,7 @@ namespace cinder {
         }
         
         std::string Message::Content::getData() const{
+            
             if(!isMultiPart()){
                 return mText->getData();
             }
@@ -585,6 +624,19 @@ namespace cinder {
             
             
             return ret;
+        }
+        
+        std::string Message::HTML::getText(){
+            std::string text = mContent;
+            
+            //change p and br into new lines
+            text = std::regex_replace(text, std::regex("<p>|<p/>|<p .*?>"), "\n\n");
+            text = std::regex_replace(text, std::regex("<br>|<br/>"), "\n");
+            
+            //strip html
+            text = std::regex_replace(text, std::regex("<.*?>"), "");
+            
+            return text;
         }
         
         

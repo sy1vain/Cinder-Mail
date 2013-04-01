@@ -27,9 +27,9 @@ namespace cinder {
         using namespace boost::asio;
         
         class Mailer;
-        typedef std::shared_ptr<Mailer> MailerPtr;
+        typedef std::shared_ptr<Mailer> MailerRef;
         
-        typedef signals::signal<void(MessagePtr,bool)> SentSignalType;
+        typedef signals::signal<void(MessageRef,bool)> SentSignalType;
         
         class Mailer {
         public:
@@ -39,20 +39,20 @@ namespace cinder {
                 LOGIN
             };
             
-            static MailerPtr create(
+            static MailerRef create(
                                     const std::string & server,
                                     int32_t port = MAIL_SMTP_PORT,
                                     const std::string & username="",
                                     const std::string & password="",
                                     LoginType type=PLAIN){
-                return MailerPtr(new Mailer(server, port, username, password, type));
+                return MailerRef(new Mailer(server, port, username, password, type));
             }
             
             SentSignalType& getSignalSent(){
                 return mObj->mSignalSent;
             }
             
-            void sendMessage(const MessagePtr& msg){
+            void sendMessage(const MessageRef& msg){
                 {
                     std::lock_guard<std::mutex> lock(mObj->mDataMutex);
                     mObj->mMessages.push(msg);
@@ -145,7 +145,7 @@ namespace cinder {
             
             struct Obj {
                 
-                typedef std::shared_ptr<ip::tcp::socket> SocketPtr;
+                typedef std::shared_ptr<ip::tcp::socket> SocketRef;
                 
                 Obj(const std::string & server,
                     int32_t port,
@@ -194,7 +194,7 @@ namespace cinder {
                     //the loop
                     //breaks on an empty message list
                     while(true){
-                        MessagePtr message;
+                        MessageRef message;
                         {
                             std::lock_guard<std::mutex> lock(mDataMutex);
                             //break the loop if empty
@@ -213,31 +213,31 @@ namespace cinder {
                     }
                 }
                 
-                void success(MessagePtr msg){
+                void success(MessageRef msg){
                     signal(msg,true);
                 }
                 
-                void fail(MessagePtr msg){
+                void fail(MessageRef msg){
                     signal(msg, false);
                 }
                 
-                void signal(MessagePtr msg, bool success){
+                void signal(MessageRef msg, bool success){
                     mSignalSent(msg, success);
                 }
                 
                 //implemented lower to save some space here
-                void sendMessage(const MessagePtr& msg);
-                SocketPtr connect();
-                Mailer::Responses disconnect(SocketPtr socket);
-                Mailer::Responses authenticate(SocketPtr socket);
-                Mailer::Responses sendData(SocketPtr socket, const std::string& str, bool appendNL=true);
-                Mailer::Responses readReply(SocketPtr socket);
+                void sendMessage(const MessageRef& msg);
+                SocketRef connect();
+                Mailer::Responses disconnect(SocketRef socket);
+                Mailer::Responses authenticate(SocketRef socket);
+                Mailer::Responses sendData(SocketRef socket, const std::string& str, bool appendNL=true);
+                Mailer::Responses readReply(SocketRef socket);
                 
                 std::mutex                      mDataMutex;
                 bool                            mThreadRunning;
                 
                 std::shared_ptr<std::thread>    mThread;
-                std::queue<MessagePtr>         mMessages;
+                std::queue<MessageRef>         mMessages;
                 
                 //server settings
                 std::string mServer;
@@ -266,11 +266,11 @@ namespace cinder {
             
         };
         
-        void Mailer::Obj::sendMessage(const MessagePtr& msg){
+        void Mailer::Obj::sendMessage(const MessageRef& msg){
             Responses reply;
             
             //get the socket by connecting
-            SocketPtr socket = connect();
+            SocketRef socket = connect();
             if(!socket){
                 ci::app::console() << "unable to connect" << std::endl;
                 fail(msg);
@@ -326,8 +326,8 @@ namespace cinder {
             success(msg);
         }
         
-        Mailer::Obj::SocketPtr Mailer::Obj::connect(){
-            SocketPtr socket;
+        Mailer::Obj::SocketRef Mailer::Obj::connect(){
+            SocketRef socket;
             
             std::string server;
             int32_t port;
@@ -349,17 +349,17 @@ namespace cinder {
             try {
                 ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
                 
-                socket = SocketPtr(new ip::tcp::socket(ios));
+                socket = SocketRef(new ip::tcp::socket(ios));
                 boost::asio::connect(*socket, endpoint_iterator);
             }catch(...){
-                return SocketPtr();
+                return SocketRef();
             }
             
             return socket;
             
         }
         
-        Mailer::Responses Mailer::Obj::disconnect(SocketPtr socket){
+        Mailer::Responses Mailer::Obj::disconnect(SocketRef socket){
             
             
             Responses reply = sendData(socket, "QUIT");
@@ -375,7 +375,7 @@ namespace cinder {
             return reply;
         }
         
-        Mailer::Responses Mailer::Obj::authenticate(SocketPtr socket){
+        Mailer::Responses Mailer::Obj::authenticate(SocketRef socket){
             Responses reply;
             
             //shake hands
@@ -420,7 +420,7 @@ namespace cinder {
             return reply;
         }
         
-        Mailer::Responses Mailer::Obj::sendData(SocketPtr socket, const std::string& data, bool appendNL){
+        Mailer::Responses Mailer::Obj::sendData(SocketRef socket, const std::string& data, bool appendNL){
             
             try {
                 int bytesWritten = 0;
@@ -443,7 +443,7 @@ namespace cinder {
             return Responses();
         }
         
-        Mailer::Responses Mailer::Obj::readReply(SocketPtr socket){
+        Mailer::Responses Mailer::Obj::readReply(SocketRef socket){
             
             try{
                 boost::array<char, 8192> buf; //very large buff just in case the server blabs a lot

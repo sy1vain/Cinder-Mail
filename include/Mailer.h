@@ -15,7 +15,6 @@
 
 
 #include "Mail.h"
-#include "Message.h"
 #include <queue>
 
 #include <boost/asio.hpp>
@@ -28,6 +27,8 @@ namespace cinder {
         
         class Mailer;
         typedef std::shared_ptr<Mailer> MailerRef;
+        
+        typedef std::shared_ptr<class Message> MessageRef;
         
         typedef signals::signal<void(MessageRef,bool)> SentSignalType;
         
@@ -51,6 +52,8 @@ namespace cinder {
             SentSignalType& getSignalSent(){
                 return mSignalSent;
             }
+            template<typename T, typename Y>
+            ci::signals::connection	connectSent( T fn, Y *inst ) { return getSignalSent().connect( std::bind( fn, inst, std::_1, std::_2 ) ); }
             
             void sendMessage(const MessageRef& msg){
                 {

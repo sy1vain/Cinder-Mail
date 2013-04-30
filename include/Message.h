@@ -28,7 +28,7 @@ namespace cinder {
         class Message {
         public:
             enum recipient_type {
-                TO,CC
+                TO,CC,BCC
             };
             
             typedef std::vector<std::string> Headers;
@@ -120,6 +120,8 @@ namespace cinder {
                     mTo.push_back(a);
                 }else if(type==CC){
                     mCC.push_back(a);
+                }else if(type==BCC){
+                    mBCC.push_back(a);
                 }
             }
             
@@ -188,6 +190,7 @@ namespace cinder {
             Address                     mReplyTo;
             std::vector<Address>        mTo;
             std::vector<Address>        mCC;
+            std::vector<Address>        mBCC;
             std::string                 mSubject;
             
             //****************//

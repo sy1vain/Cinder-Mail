@@ -19,8 +19,14 @@ Message::Headers Message::getHeaders(){
     //check complete here first
     
     headers.push_back("MAIL FROM:" + mFrom.getFullAddress(false));
-    if(mTo.size()){//to prevent an error here, if it is empty the server will most likely reject it
-        headers.push_back("RCPT TO:" + mTo.front().getFullAddress(false));
+    for(auto & address: mTo){
+        headers.push_back("RCPT TO:" + address.getFullAddress(false));
+    }
+    for(auto & address: mCC){
+        headers.push_back("RCPT TO:" + address.getFullAddress(false));
+    }
+    for(auto & address: mBCC){
+        headers.push_back("RCPT TO:" + address.getFullAddress(false));
     }
     
     return headers;
@@ -59,7 +65,7 @@ std::string Message::getData() const {
     //the CC
     for(itr = mCC.begin(); itr<mCC.end(); ++itr){//reusing the itr form the to
         if(itr==mCC.begin()){
-            data << "Cc: ";
+            data << "cc: ";
         }
         data << (*itr).getFullAddress();
         

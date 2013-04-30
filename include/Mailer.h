@@ -159,7 +159,7 @@ namespace cinder {
                 }
             };
             
-            typedef std::shared_ptr<ip::tcp::socket> SocketRef;
+            typedef std::shared_ptr<boost::asio::ip::tcp::socket> SocketRef;
             
             void run(bool threaded = true){
                 if(!threaded){
@@ -304,13 +304,13 @@ namespace cinder {
                 }
                 
                 //static smtp for now
-                ip::tcp::resolver resolver(ios);
-                ip::tcp::resolver::query query(server, ci::toString(port));
+                boost::asio::ip::tcp::resolver resolver(ios);
+                boost::asio::ip::tcp::resolver::query query(server, ci::toString(port));
                 
                 try {
-                    ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
+                    boost::asio::ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
                     
-                    socket = SocketRef(new ip::tcp::socket(ios));
+                    socket = SocketRef(new boost::asio::ip::tcp::socket(ios));
                     boost::asio::connect(*socket, endpoint_iterator);
                 }catch(...){
                     return SocketRef();
@@ -327,7 +327,7 @@ namespace cinder {
                 Responses reply = sendData(socket, "QUIT");
                 try {
                     if(socket->is_open()){
-                        socket->shutdown(ip::tcp::socket::shutdown_both);
+                        socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both);
                         socket->close();
                     }
                 }catch(...){

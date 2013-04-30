@@ -85,13 +85,14 @@ std::string Message::getData() const {
     time_t t;
     time(&t);
     char timestring[128] = "";
-    std::string timeformat = "Date: %d %b %y %H:%M:%S %Z";
+    std::string timeformat = "Date: %d %b %y %H:%M:%S %z";
     if(strftime(timestring, 127, timeformat.c_str(), localtime(&t))) { // got the date
         data << timestring << MAIL_SMTP_NEWLINE;
     }
     
     //add the subject line
     data << "Subject: " << mSubject << MAIL_SMTP_NEWLINE << MAIL_SMTP_NEWLINE;
+    
     
     if(isMultiPart()){
         data << "This is a MIME encapsulated message" << MAIL_SMTP_NEWLINE;

@@ -61,6 +61,7 @@ namespace cinder {
                     return ret.str();
                 }
             protected:
+                
                 std::string mAddress;
                 std::string mName;
             };
@@ -177,6 +178,8 @@ namespace cinder {
             bool isMultiPart() const{
                 return !mAttachments.empty() || mContent->isMultiPart();
             }
+            
+            std::string formatDate() const;
             
             //some define from helpe classes later on
             class Content;

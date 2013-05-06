@@ -82,13 +82,7 @@ std::string Message::getData() const {
     }
     
     //add the current local data
-    time_t t;
-    time(&t);
-    char timestring[128] = "";
-    std::string timeformat = "Date: %d %b %y %H:%M:%S %z";
-    if(strftime(timestring, 127, timeformat.c_str(), localtime(&t))) { // got the date
-        data << timestring << MAIL_SMTP_NEWLINE;
-    }
+    data << "Date: " << formatDate() << MAIL_SMTP_NEWLINE;
     
     //add the subject line
     data << "Subject: " << mSubject << MAIL_SMTP_NEWLINE << MAIL_SMTP_NEWLINE;
@@ -333,4 +327,46 @@ Message::Headers Message::Attachment::getHeaders() const {
 
 std::string Message::Attachment::getData() const{
     return ci::toBase64(mDataSource->getBuffer(), MAIL_SMTP_BASE64_LINE_WIDTH);
+}
+
+std::string Message::formatDate() const{
+    std::stringstream s;
+    
+    time_t now;
+    time(&now);
+    
+#if defined(CINDER_MSW)
+    struct tm * timeStruct;
+    
+    timeStruct = gmtime(&now);
+    int hourOffset = -timeStruct->tm_hour;
+    timeStruct = localtime(&now);
+    hourOffset += timeStruct->tm_hour;
+    
+    char timestring[128] = "";
+    std::string timeformat = "%d %b %y %H:%M:%S";
+    if(strftime(timestring, 127, timeformat.c_str(), localtime(&now))) { // got the date
+        s << timestring;
+        //add a space
+        s << " ";
+        
+        hourOffset *= 100;
+        
+        char timezone[6] = "";
+        sprintf(timezone, "%+05i", hourOffset);
+        s << timezone;
+        
+    }
+    
+#else
+    //add the current local data
+    
+    char timestring[128] = "";
+    std::string timeformat = "%d %b %y %H:%M:%S %z";
+    if(strftime(timestring, 127, timeformat.c_str(), localtime(&now))) { // got the date
+        s << timestring;
+    }
+#endif
+    
+    return s.str();
 }
